@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import importlib
 import signal
 import sys
@@ -19,14 +20,15 @@ from workraft.db import (
     setup_database,
     update_worker_state_sync,
 )
+from workraft.models import DBConfig
 from workraft.utils import run_command
 
 
-db_config = get_db_config()
-
-
-def signal_handler(signum, frame):
-    global shutdown_flag, db_config
+def signal_handler(signum, frame, db_config):
+    global shutdown_flag
+    if not db_config:
+        logger.error("No database configuration found. Cannot update worker state.")
+        sys.exit(1)
     logger.info(f"Received signal {signum}. Initiating graceful shutdown...")
     WorkerStateSingleton.update(status="OFFLINE")
     logger.info(f"Latest worker state: {WorkerStateSingleton.get()}")
@@ -46,10 +48,17 @@ class CLI:
         workraft_path: str,
         worker_id: Optional[str] = None,
         queues: list[str] = ["DEFAULT"],
+        db_config: Optional[DBConfig] = None,
     ):
-        global db_config, shutdown_flag
+        global shutdown_flag
+        if db_config is None:
+            logger.info("No database configuration provided. Using defaults.")
+            db_config = get_db_config()
         for sig in (signal.SIGTERM, signal.SIGINT):
-            signal.signal(sig, signal_handler)
+            signal_handler_partial = functools.partial(
+                signal_handler, db_config=db_config
+            )
+            signal.signal(sig, signal_handler_partial)
 
         logger.info(f"Getting Workraft object at {workraft_path}")
         workraft_instance: Workraft = import_workraft(workraft_path)
@@ -80,14 +89,18 @@ class CLI:
         await asyncio.gather(run_peon_task, return_exceptions=True)
 
     @staticmethod
-    async def build_stronghold():
+    async def build_stronghold(db_config: Optional[DBConfig] = None):
+        if db_config is None:
+            logger.info("No database configuration provided. Using defaults.")
+            db_config = get_db_config()
+        print(db_config)
         pool = await get_connection_pool(db_config)
         await setup_database(pool)
         logger.info("Stronghold is ready!")
 
     @staticmethod
     def start_docker_database(debug: bool = True):
-        run_command("bash renew_workraft_db.sh", debug=debug)
+        run_command("bash scripts/renew_workraft_db.sh", debug=debug)
         logger.info("Zug zug. The database is now running in a Docker container.")
         logger.info("Run python -m workraft build_stronghold to setup the database.")
 

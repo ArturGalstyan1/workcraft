@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+# Note: Do not run this script directly. It is meant to be run by the Dockerfile.
+
 # Function to run SQL commands
 psql_command() {
   psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$1" --command "$2"

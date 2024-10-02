@@ -9,6 +9,12 @@ class DBConfig(BaseModel):
     password: str
     database: str
 
+    def __repr__(self) -> str:
+        return (
+            f"DBConfig(host={self.host}, port={self.port}, user={self.user}, "
+            f"password={self.password}, database={self.database})"
+        )
+
 
 class WorkerState(BaseModel):
     id: str
