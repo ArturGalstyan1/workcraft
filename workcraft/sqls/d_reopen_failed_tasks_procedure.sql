@@ -29,7 +29,6 @@ BEGIN
             UPDATE bountyboard
             SET status = 'PENDING',
                 retry_count = retry_count + 1,
-                updated_at = CURRENT_TIMESTAMP,
                 worker_id = NULL
             WHERE id = task_id;
 

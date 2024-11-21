@@ -23,7 +23,7 @@ BEGIN
         SET affected_count = affected_count + 1;
 
         UPDATE bountyboard
-        SET status = 'PENDING', worker_id = NULL, updated_at = CURRENT_TIMESTAMP
+        SET status = 'PENDING', worker_id = NULL
         WHERE id = task_id;
 
         INSERT INTO logs (message)

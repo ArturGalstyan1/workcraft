@@ -1,8 +1,12 @@
+import asyncio
 import importlib
 import os
+import random
 import signal
 import subprocess
 import threading
+
+from workcraft.settings import Settings
 
 
 def import_module_attribute(path: str):
@@ -63,3 +67,11 @@ def run_command(
         return thread
     else:
         return command_thread()
+
+
+async def sleep(settings: Settings):
+    random_noise = random.normalvariate(
+        settings.DB_POLLING_INTERVAL_RANDOMNESS_MEAN,
+        settings.DB_POLLING_INTERVAL_RANDOMNESS_STDDEV,
+    )
+    await asyncio.sleep(settings.DB_POLLING_INTERVAL + random_noise)

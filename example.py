@@ -32,7 +32,7 @@ def postrun_handler(task_id, task_name, result, status):
 
 
 def generate_2mb_string():
-    return "a" * 1024 * 1024 * 2
+    return "a"
 
 
 async def main():

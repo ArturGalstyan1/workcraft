@@ -1,6 +1,6 @@
 [project]
 name = "workcraft"
-version = "0.5.23"
+version = "0.5.24"
 description = "A simple, lightweight, database-only, worker library in Python"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -26,6 +26,12 @@ dev = ["pre-commit", "pytest", "mkdocs"]
 extend-include = ["*.ipynb"]
 src = []
 
+[tool.pyright]
+include = ["tests"]
+venvPath = "."
+venv = ".venv"
+
+
 [tool.ruff.lint]
 fixable = ["I001", "F401"]
 ignore = ["E402", "E721", "E731", "E741", "F722", "F821"]
@@ -37,11 +43,6 @@ combine-as-imports = true
 extra-standard-library = ["typing_extensions"]
 lines-after-imports = 2
 order-by-type = false
-
-[tool.pyright]
-include = ["src", "tests"]
-venvPath = "."
-venv = ".venv"
 
 [build-system]
 requires = ["hatchling"]

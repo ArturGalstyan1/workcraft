@@ -17,6 +17,7 @@ from workcraft.db import (
     get_db_config,
     send_heartbeat_sync,
     update_worker_state_sync,
+    verify_database_setup,
 )
 from workcraft.peon import run_peon
 from workcraft.settings import settings
@@ -66,6 +67,13 @@ class CLI:
         signal_handler_partial = functools.partial(signal_handler, db_config=db_config)
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, signal_handler_partial)
+
+        logger.info("Checking if the database tables are set up")
+        while not verify_database_setup(db_config):
+            logger.warning("Database tables are not set up. Retrying in 5 seconds...")
+            await asyncio.sleep(5)
+
+        logger.info("Database tables are set up")
 
         logger.info(f"Getting workcraft object at {workcraft_path}")
         workcraft_instance: Workcraft = import_module_attribute(workcraft_path)

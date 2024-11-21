@@ -1,6 +1,5 @@
 import asyncio
 import json
-import random
 import traceback
 
 from beartype.typing import Any
@@ -16,6 +15,7 @@ from workcraft.db import (
 )
 from workcraft.models import DBConfig, Task, TaskStatus
 from workcraft.settings import settings
+from workcraft.utils import sleep
 
 
 def dequeue_task(db_config: DBConfig, workcraft: Workcraft) -> Task | None:
@@ -32,7 +32,6 @@ def dequeue_task(db_config: DBConfig, workcraft: Workcraft) -> Task | None:
     registered_tasks = workcraft.tasks.keys()
     with DBEngineSingleton.get(db_config).connect() as conn:
         try:
-            # First get just the ID of the row we want
             statement = text("""
 SELECT id FROM (
     SELECT id
@@ -42,6 +41,7 @@ SELECT id FROM (
     AND task_name IN :registered_tasks
     ORDER BY created_at ASC
     LIMIT 1
+    FOR UPDATE SKIP LOCKED
 ) AS t
             """)
             id_result = conn.execute(
@@ -104,33 +104,22 @@ async def run_peon(db_config: DBConfig, workcraft: Workcraft):
     for name, _ in workcraft.tasks.items():
         logger.info(f"- {name}")
 
-    logger.info("Ready to work!")
+    logger.info("Zug zug. Ready to work!")
 
-    while True:  # Removed the try block from here
+    while True:
         try:
+            await sleep(settings)
             task = dequeue_task(db_config, workcraft)
             if task:
                 logger.info(f"Dequeued task: {task.task_name}, ID: {task.id}")
                 logger.debug(f"Task payload: {task.payload}")
                 await execute_task(db_config, task, workcraft)
-            try:
-                await asyncio.sleep(settings.DB_POLLING_INTERVAL)
-                random_noise = random.normalvariate(
-                    settings.DB_POLLING_INTERVAL_RANDOMNESS_MEAN,
-                    settings.DB_POLLING_INTERVAL_RANDOMNESS_STDDEV,
-                )
-                await asyncio.sleep(settings.DB_POLLING_INTERVAL + random_noise)
-            except Exception as e:
-                logger.error(f"Error during sleep cycle: {e}")
-                # If sleep fails, add a simple delay to avoid tight loops
-                await asyncio.sleep(1)
         except asyncio.CancelledError:
             logger.info("Main loop cancelled. Shutting down...")
             raise
         except Exception as e:
             logger.error(f"Unexpected error in main loop: {e}")
             logger.error(traceback.format_exc())
-            # Add a small delay to avoid tight loops in case of persistent errors
             await asyncio.sleep(1)
 
 
@@ -155,7 +144,7 @@ async def execute_task(
         logger.error(f"Task {task.task_name} failed: {e}")
         logger.error(traceback.format_exc())
         status = TaskStatus.FAILURE
-        result = str(e)
+        result = traceback.format_exc() + "\n" + str(e)
     finally:
         logger.info(f"Task {task.task_name} finished with status: {status}")
         with DBEngineSingleton.get(db_config).connect() as conn:
@@ -220,28 +209,22 @@ def update_task_status(
     conn: Connection, task_id: str, status: TaskStatus, result: Any | None
 ) -> None:
     try:
-        if status == TaskStatus.FAILURE:
-            conn.execute(
-                text(
-                    "UPDATE bountyboard SET status = :status, result = :res, retry_count = retry_count + 1 WHERE id = :id"  # noqa
-                ),
-                {
-                    "status": status.value,
-                    "res": result,
-                    "id": task_id,
-                },
-            )
-        else:
-            conn.execute(
-                text(
-                    "UPDATE bountyboard SET status = :status, result = :res WHERE id = :id"  # noqa
-                ),
-                {
-                    "status": status.value,
-                    "res": result,
-                    "id": task_id,
-                },
-            )
+        conn.execute(
+            text(
+                """
+UPDATE bountyboard
+SET status = :status,
+    result = :res,
+    retry_count = CASE WHEN :status = 'FAILURE' THEN retry_count + 1 ELSE retry_count END
+WHERE id = :id
+                """  # noqa
+            ),
+            {
+                "status": status.value,
+                "res": result,
+                "id": task_id,
+            },
+        )
         conn.commit()
     except Exception as e:
         logger.error(f"Failed to update task {task_id} status to {status}: {e}")

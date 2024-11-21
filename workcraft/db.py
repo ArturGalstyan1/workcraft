@@ -102,6 +102,29 @@ def send_heartbeat_sync(db_config: DBConfig, worker_id: str) -> None:
                 conn.close()
 
 
-def verify_database_setup(db_config: DBConfig):
-    # TODO: check if the database is setup correctly
-    pass
+def verify_database_setup(db_config: DBConfig) -> bool:
+    with DBEngineSingleton.get(db_config).connect() as conn:
+        # Check tables exist
+        tables_query = text("""
+            SELECT COUNT(*) = 3 as tables_exist FROM information_schema.tables
+            WHERE table_name IN ('logs', 'peon', 'bountyboard')
+            AND table_schema = :db_name
+        """)
+        tables_exist = conn.execute(
+            tables_query, {"db_name": db_config.database}
+        ).scalar()
+
+        if not tables_exist:
+            return False
+
+        # Verify key columns and types
+        structure_query = text("""
+SELECT
+    (SELECT column_type FROM information_schema.columns
+        WHERE table_name = 'peon' AND column_name = 'status') = "enum('IDLE','PREPARING','WORKING','OFFLINE')"
+    AND
+    (SELECT column_type FROM information_schema.columns
+        WHERE table_name = 'bountyboard' AND column_name = 'status') = "enum('PENDING','RUNNING','SUCCESS','FAILURE','INVALID')"
+    as correct_structure
+        """)  # noqa
+        return bool(conn.execute(structure_query).scalar())
