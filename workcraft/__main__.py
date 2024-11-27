@@ -12,6 +12,7 @@ from sqlalchemy import text
 
 from workcraft.core import Workcraft, WorkerStateSingleton
 from workcraft.db import (
+    check_connection,
     DBConfig,
     DBEngineSingleton,
     get_db_config,
@@ -68,12 +69,21 @@ class CLI:
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, signal_handler_partial)
 
+        logger.info("Trying to connect to the database")
+        while not check_connection(db_config):
+            logger.warning(
+                "Could not connect to the database. Retrying in 5 seconds..."
+            )
+            await asyncio.sleep(5)
+
+        logger.success("Connected to the database")
+
         logger.info("Checking if the database tables are set up")
         while not verify_database_setup(db_config):
             logger.warning("Database tables are not set up. Retrying in 5 seconds...")
             await asyncio.sleep(5)
 
-        logger.info("Database tables are set up")
+        logger.success("Database tables are set up")
 
         logger.info(f"Getting workcraft object at {workcraft_path}")
         workcraft_instance: Workcraft = import_module_attribute(workcraft_path)

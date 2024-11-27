@@ -97,9 +97,21 @@ def send_heartbeat_sync(db_config: DBConfig, worker_id: str) -> None:
                 time.sleep(settings.DB_PEON_HEARTBEAT_INTERVAL)
         except Exception as e:
             logger.error(f"Heartbeat failed: {e}")
+            time.sleep(settings.DB_PEON_HEARTBEAT_INTERVAL)
         finally:
             if conn:
                 conn.close()
+
+
+def check_connection(db_config: DBConfig) -> bool:
+    try:
+        with DBEngineSingleton.get(db_config).connect() as conn:
+            if conn.execute(text("SELECT 1")).scalar() == 1:
+                return True
+            return False
+    except Exception as e:
+        logger.error(f"Connection check failed: {e}")
+        return False
 
 
 def verify_database_setup(db_config: DBConfig) -> bool:

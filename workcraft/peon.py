@@ -9,6 +9,7 @@ from sqlalchemy import Connection, text
 
 from workcraft.core import Workcraft, WorkerStateSingleton
 from workcraft.db import (
+    check_connection,
     DBEngineSingleton,
     update_worker_state_sync,
     verify_database_setup,
@@ -104,9 +105,22 @@ async def run_peon(db_config: DBConfig, workcraft: Workcraft):
     for name, _ in workcraft.tasks.items():
         logger.info(f"- {name}")
 
-    logger.info("Zug zug. Ready to work!")
-
+    logger.success("Zug zug. Ready to work!")
+    connection_fine = False
     while True:
+        try:
+            while not check_connection(db_config):
+                logger.error("Database connection lost. Retrying...")
+                connection_fine = False
+                await asyncio.sleep(1)
+        except Exception as e:
+            logger.error(f"Error checking database connection: {e}")
+            continue
+
+        if not connection_fine:
+            logger.success("Database connection established.")
+            connection_fine = True
+
         try:
             await sleep(settings)
             task = dequeue_task(db_config, workcraft)
