@@ -49,6 +49,13 @@ class CLI:
         db_use_ssl: bool = False,
     ):
         global shutdown_flag
+        if not isinstance(queues, list):
+            raise ValueError("""
+Invalid queues format.
+You have to pass the queue list in the following format:
+    --queues="[queue1,queue2]"
+(Note the quotes around the list of queues and the lack of spaces between the queues)
+""")
 
         if load_db_config_from_env:
             logger.info("Reading DB config from environment variables")
@@ -94,6 +101,7 @@ class CLI:
         worker_id = worker_id if worker_id is not None else str(uuid.uuid4())
 
         WorkerStateSingleton.update(id=worker_id, queues=queues)
+
         update_worker_state_sync(db_config, WorkerStateSingleton.get())
         logger.info(f"Worker State: {WorkerStateSingleton.get()}")
 

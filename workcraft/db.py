@@ -1,3 +1,4 @@
+import json
 import os
 import time
 
@@ -67,7 +68,7 @@ def update_worker_state_sync(db_config: DBConfig, worker_state: WorkerState):
             status = :status,
             last_heartbeat = NOW(),
             current_task = :current_task,
-            queues = :queues
+            queues = CAST(:queues AS JSON)
         """)
 
         conn.execute(
@@ -76,7 +77,7 @@ def update_worker_state_sync(db_config: DBConfig, worker_state: WorkerState):
                 "id": worker_state.id,
                 "status": worker_state.status,
                 "current_task": worker_state.current_task,
-                "queues": ",".join(worker_state.queues),
+                "queues": json.dumps(worker_state.queues),
             },
         )
         conn.commit()

@@ -20,6 +20,8 @@ from workcraft.utils import sleep
 
 
 def dequeue_task(db_config: DBConfig, workcraft: Workcraft) -> Task | None:
+    worker_state = WorkerStateSingleton.get()
+
     def mark_task_as_invalid(conn: Connection, task_id: str):
         logger.error(f"Marking task {task_id} as INVALID")
         statement = text("""
@@ -34,19 +36,25 @@ def dequeue_task(db_config: DBConfig, workcraft: Workcraft) -> Task | None:
     with DBEngineSingleton.get(db_config).connect() as conn:
         try:
             statement = text("""
-SELECT id FROM (
-    SELECT id
-    FROM bountyboard
-    WHERE status = 'PENDING'
-    OR (status = 'FAILURE' AND retry_on_failure = TRUE AND retry_count <= retry_limit)
-    AND task_name IN :registered_tasks
-    ORDER BY created_at ASC
-    LIMIT 1
-    FOR UPDATE SKIP LOCKED
-) AS t
+                SELECT bountyboard.id
+                FROM bountyboard
+                JOIN peon ON peon.id = :worker_id
+                WHERE (bountyboard.status = 'PENDING'
+                    OR (bountyboard.status = 'FAILURE'
+                        AND bountyboard.retry_on_failure = TRUE
+                        AND bountyboard.retry_count <= bountyboard.retry_limit))
+                AND bountyboard.task_name IN :registered_tasks
+                AND JSON_CONTAINS(peon.queues, JSON_QUOTE(bountyboard.queue))
+                ORDER BY bountyboard.created_at ASC
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
             """)
             id_result = conn.execute(
-                statement, {"registered_tasks": tuple(registered_tasks)}
+                statement,
+                {
+                    "registered_tasks": tuple(registered_tasks),
+                    "worker_id": worker_state.id,
+                },
             ).fetchone()
 
             if id_result:

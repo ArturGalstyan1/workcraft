@@ -1,8 +1,7 @@
-
 CREATE TABLE IF NOT EXISTS peon (
     id VARCHAR(36) PRIMARY KEY,
     status ENUM('IDLE', 'PREPARING', 'WORKING', 'OFFLINE') DEFAULT 'IDLE',
     last_heartbeat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     current_task CHAR(36),
-    queues TEXT
+    queues JSON
 );

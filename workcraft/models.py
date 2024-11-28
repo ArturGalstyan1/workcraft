@@ -116,4 +116,4 @@ class WorkerState(BaseModel):
     id: str
     status: Literal["IDLE", "PREPARING", "WORKING", "OFFLINE"]
     current_task: str | None = None
-    queues: str
+    queues: list[str]
